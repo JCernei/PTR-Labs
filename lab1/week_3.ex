@@ -34,6 +34,7 @@ defmodule ModifyActor do
           end
         end
     end
+
     loop()
   end
 end
@@ -155,8 +156,7 @@ defmodule Semaphore do
   defp init(count) do
     receive do
       {:acquire, sender} ->
-        # IO.puts("Received from Acquire")
-        # IO.inspect(sender)
+        # IO.puts(count)
         if count > 0 do
           send(sender, :ok)
           init(count - 1)
@@ -165,8 +165,7 @@ defmodule Semaphore do
         end
 
       {:release, sender} ->
-        # IO.puts("Received from Release")
-        # IO.inspect(sender)
+        # IO.puts(count+1)
         send(sender, :ok)
         init(count + 1)
 
@@ -194,12 +193,46 @@ defmodule Semaphore do
         # IO.puts("Released")
     end
   end
-
-  def shutdown(semaphore) do
-    send(semaphore, :shutdown)
-  end
 end
 
 mutex = Semaphore.start(5)
 IO.puts(Semaphore.acquire(mutex))
 IO.puts(Semaphore.release(mutex))
+
+
+defmodule Scheduler do
+  def start() do
+    spawn_link(__MODULE__, :supervise, [])
+  end
+
+  def supervise() do
+    receive do
+      {:completed} ->
+        IO.puts("The worker solved its task!")
+
+      {:failed, pid} ->
+        IO.puts("Worker failed. Restarting it...")
+        Process.exit(pid, :normal)
+        RiskyTask.start(self())
+    end
+    supervise()
+  end
+end
+
+defmodule RiskyTask do
+  def start(scheduler) do
+    IO.puts("Starting risky task")
+    spawn_link(__MODULE__, :do_task, [scheduler])
+  end
+
+  def do_task(scheduler) do
+    if :rand.uniform() < 0.5 do
+      send(scheduler, {:failed, self()})
+    else
+      send(scheduler, {:completed})
+    end
+  end
+end
+
+scheduler = Scheduler.start()
+RiskyTask.start(scheduler)
