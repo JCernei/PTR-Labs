@@ -5,4 +5,8 @@ defmodule ProcessHelper do
       _ -> nil
     end
   end
+
+  def get_worker_pid(worker_id) do
+    Process.whereis(String.to_atom("TweetPrinter#{worker_id}"))
+  end
 end
