@@ -6,7 +6,8 @@ defmodule ProcessHelper do
     end
   end
 
-  def get_worker_pid(worker_id) do
-    Process.whereis(String.to_atom("TweetPrinter#{worker_id}"))
+  def get_worker_pid(worker_type, worker_id) do
+    worker_name = Module.split(worker_type) |> List.last()
+    Process.whereis(String.to_atom("#{worker_name}#{worker_id}"))
   end
 end
