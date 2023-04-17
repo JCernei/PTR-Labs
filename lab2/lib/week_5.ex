@@ -470,20 +470,27 @@ defmodule TweetBatcher do
 
   def init({batch_size, time_window}) do
     IO.puts("Starting the Batcher")
-    print_after(time_window)
-    state = %{matching_sets: [], batch_size: batch_size}
+    time_ref = print_after(time_window)
+
+    state = %{
+      matching_sets: [],
+      batch_size: batch_size,
+      time_window: time_window,
+      time_ref: time_ref
+    }
+
     {:ok, state}
   end
 
   defp print_after(time_window) do
-    Process.send_after(:TweetBatcher, {:timeout, time_window}, time_window)
-    :noreply
+    Process.send_after(:TweetBatcher, :timeout, time_window)
   end
 
   def handle_cast({:batch, matching_set}, state) do
     new_matching_sets = [matching_set | state.matching_sets]
 
     if length(new_matching_sets) == state.batch_size do
+      Process.cancel_timer(state.time_ref)
       IO.puts("\nBatch of #{state.batch_size} tweets:")
 
       Enum.with_index(new_matching_sets)
@@ -491,13 +498,14 @@ defmodule TweetBatcher do
         IO.puts("#{index + 1}. #{inspect(matching_set)}")
       end)
 
-      {:noreply, %{matching_sets: [], batch_size: state.batch_size}}
+      new_time_ref = print_after(state.time_window)
+      {:noreply, %{state | matching_sets: [], time_ref: new_time_ref}}
     else
       {:noreply, %{state | matching_sets: new_matching_sets}}
     end
   end
 
-  def handle_info({:timeout, time_window}, state) do
+  def handle_info(:timeout, state) do
     if length(state.matching_sets) > 0 do
       IO.puts("\nThe time has come")
       IO.puts("Batch of #{length(state.matching_sets)} tweets (due to time out):")
@@ -507,11 +515,11 @@ defmodule TweetBatcher do
         IO.puts("#{index + 1}. #{inspect(matching_set)}")
       end)
 
-      print_after(time_window)
-      {:noreply, %{matching_sets: [], batch_size: state.batch_size}}
+      new_time_ref = print_after(state.time_window)
+      {:noreply, %{state | matching_sets: [], time_ref: new_time_ref}}
     else
-      print_after(time_window)
-      {:noreply, state}
+      new_time_ref = print_after(state.time_window)
+      {:noreply, %{state | time_ref: new_time_ref}}
     end
   end
 end
@@ -539,7 +547,7 @@ defmodule RetweetAggregator do
 
   defp schedule_check_aggregate do
     Process.send_after(self(), :check_aggregate, 100)
-    :noreply
+    # :noreply
   end
 
   def handle_cast({:redacted_text, redacted_text, :id, message_id}, state) do
